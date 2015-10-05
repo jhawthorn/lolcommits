@@ -9,19 +9,13 @@ module Lolcommits
       # capture the raw video with ffmpeg video4linux2
       system_call "ffmpeg -v quiet -y -f video4linux2 -video_size 320x240 -i #{capture_device_string} -t #{capture_duration} #{video_location} > /dev/null"
       return unless File.exist?(video_location)
-      # convert raw video to png frames with ffmpeg
-      system_call "ffmpeg #{capture_delay_string} -v quiet -i #{video_location} -t #{animated_duration} #{frames_location}/%09d.png > /dev/null"
 
-      # use fps to set delay and number of frames to skip (for lower filesized gifs)
-      fps   = video_fps(video_location)
-      skip  = frame_skip(fps)
-      delay = frame_delay(fps, skip)
-      debug "Capturer: anaimated gif choosing every #{skip} frames with a frame delay of #{delay}"
+      filters="fps=15,scale=320:-1:flags=lanczos"
 
-      # create the looping animated gif from frames (picks nth frame with seq)
-      seq_command = "seq -f #{frames_location}/%09g.png 1 #{skip} #{Dir["#{frames_location}/*"].length}"
-      # convert to animated gif with delay and gif optimisation
-      system_call "convert -layers OptimizeTransparency -delay #{delay} -loop 0 `#{seq_command}` -coalesce #{snapshot_location} > /dev/null"
+      palette_location="/tmp/palette.png"
+
+      system_call %{ffmpeg -v warning -i #{video_location} -vf "#{filters},palettegen" -y #{palette_location}}
+      system_call %{ffmpeg -v warning -i #{video_location} -i #{palette_location} -lavfi "#{filters} [x]; [x][1:v] paletteuse" -y #{snapshot_location}}
     end
 
     private
